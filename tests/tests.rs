@@ -382,7 +382,7 @@ fn test_deferred_removes() {
 
 #[test]
 fn test_large_input() {
-    let input_size: i32 = 1_000_000;
+    let input_size: i32 = 500_000;
     let mut inputs: Vec<(i32, i32)> = (0..input_size).zip(0..input_size).collect();
     inputs.shuffle(&mut thread_rng());
 
