@@ -71,7 +71,7 @@ where
         while attempt < capacity {
             {
                 let table_reader = self.lock_table_reader();
-                if Self::is_resized(&mut capacity, &table_reader) {
+                if Self::update_capacity_and_check_if_resized(&mut capacity, &table_reader) {
                     attempt = 0;
                     continue;
                 }
@@ -101,7 +101,9 @@ where
         loop {
             {
                 let table_reader = self.lock_table_reader();
-                if Self::is_resized(&mut capacity, &table_reader) || attempt >= capacity {
+                if Self::update_capacity_and_check_if_resized(&mut capacity, &table_reader)
+                    || attempt >= capacity
+                {
                     attempt = 0;
                     continue;
                 }
@@ -135,7 +137,7 @@ where
         while attempt < capacity {
             {
                 let table_reader = self.lock_table_reader();
-                if Self::is_resized(&mut capacity, &table_reader) {
+                if Self::update_capacity_and_check_if_resized(&mut capacity, &table_reader) {
                     attempt = 0;
                     continue;
                 }
@@ -189,21 +191,22 @@ where
         self.is_resizing.store(false, Ordering::SeqCst);
     }
 
-    fn is_resized<'a>(capacity: &mut usize, table_reader: &TableReader<'a, K, V>) -> bool {
+    fn update_capacity_and_check_if_resized<'a>(
+        capacity: &mut usize,
+        table_reader: &TableReader<'a, K, V>,
+    ) -> bool {
         let new_capacity = table_reader.len();
         let is_capacity_uninitialized = *capacity == std::usize::MAX;
         if is_capacity_uninitialized {
             *capacity = new_capacity;
         }
 
-        let mut capacity_changed = false;
         if *capacity != new_capacity {
             *capacity = new_capacity;
-            capacity_changed = true;
-            thread::yield_now();
+            return true;
         }
 
-        capacity_changed
+        return false;
     }
 
     fn yield_if_resizing(&self) {
