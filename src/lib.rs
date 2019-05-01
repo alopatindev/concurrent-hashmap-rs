@@ -158,19 +158,7 @@ where
                 let mut entry = table_reader[index].lock().unwrap();
                 match entry.as_ref() {
                     Entry::Vacant => {
-                        let new_entry = if self.is_resizing.load(Ordering::SeqCst) {
-                            Entry::DeferredOccupied {
-                                key: key,
-                                value: value,
-                            }
-                        } else {
-                            Entry::Occupied {
-                                key: key,
-                                value: value,
-                            }
-                        };
-
-                        *entry = Box::new(new_entry);
+                        *entry = self.new_occupied_entry(key, value);
                         self.size.fetch_add(1, Ordering::SeqCst);
                         break;
                     }
@@ -183,18 +171,7 @@ where
                         value: _,
                     } => {
                         if *old_key == key {
-                            let new_entry = if self.is_resizing.load(Ordering::SeqCst) {
-                                Entry::DeferredOccupied {
-                                    key: key,
-                                    value: value,
-                                }
-                            } else {
-                                Entry::Occupied {
-                                    key: key,
-                                    value: value,
-                                }
-                            };
-                            *entry = Box::new(new_entry);
+                            *entry = self.new_occupied_entry(key, value);
                             break;
                         }
                     }
@@ -240,13 +217,9 @@ where
                         value: old_value,
                     } => {
                         if *old_key == *key {
-                            let new_entry = if self.is_resizing.load(Ordering::SeqCst) {
-                                Entry::DeferredRemoved { key: key.clone() }
-                            } else {
-                                Entry::Removed
-                            };
+                            let new_entry = self.new_removed_entry(key.clone());
                             let old_value = old_value.clone();
-                            *entry = Box::new(new_entry);
+                            *entry = new_entry;
                             self.size.fetch_sub(1, Ordering::SeqCst);
                             return Some(old_value);
                         }
@@ -269,6 +242,30 @@ where
         }
 
         None
+    }
+
+    fn new_occupied_entry(&self, key: K, value: V) -> BoxedEntry<K, V> {
+        let entry = if self.is_resizing.load(Ordering::SeqCst) {
+            Entry::DeferredOccupied {
+                key: key,
+                value: value,
+            }
+        } else {
+            Entry::Occupied {
+                key: key,
+                value: value,
+            }
+        };
+        Box::new(entry)
+    }
+
+    fn new_removed_entry(&self, key: K) -> BoxedEntry<K, V> {
+        let entry = if self.is_resizing.load(Ordering::SeqCst) {
+            Entry::DeferredRemoved { key: key.clone() }
+        } else {
+            Entry::Removed
+        };
+        Box::new(entry)
     }
 
     fn hash(key: &K, attempt: usize, capacity: usize) -> usize {
