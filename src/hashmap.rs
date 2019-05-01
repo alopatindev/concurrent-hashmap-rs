@@ -1,21 +1,18 @@
-use crate::hashtable::{Entry, HashTable, TableWriter, MIN_CAPACITY};
+pub use crate::hashtable::MIN_CAPACITY;
+use crate::hashtable::{Entry, HashTable, TableWriter};
 use num::Integer;
 use num_traits::cast::NumCast;
 use num_traits::Signed;
 
 const MAX_LOAD_FACTOR: f64 = 0.5;
 
-pub struct HashMap<K, V>
-where
-    K: Integer + Signed + NumCast + Clone + Send + Sync,
-    V: PartialEq + Clone + Send + Sync,
-{
+pub struct HashMap<K, V> {
     hash_table: HashTable<K, V>,
 }
 
 impl<K, V> HashMap<K, V>
 where
-    K: Integer + Signed + NumCast + Clone + Send + Sync,
+    K: Integer + Signed + NumCast + PartialEq + Clone + Send + Sync,
     V: PartialEq + Clone + Send + Sync,
 {
     pub fn new() -> Self {

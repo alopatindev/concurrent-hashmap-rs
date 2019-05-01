@@ -3,8 +3,7 @@ extern crate quickcheck;
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
-use concurrent_hashmap::hashmap::HashMap;
-use concurrent_hashmap::hashtable::MIN_CAPACITY;
+use concurrent_hashmap::hashmap::{HashMap, MIN_CAPACITY};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::collections::HashMap as StdHashMap;

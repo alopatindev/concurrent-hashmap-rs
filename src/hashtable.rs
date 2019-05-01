@@ -3,17 +3,13 @@ use num_traits::cast::NumCast;
 use num_traits::Signed;
 use std::cmp::max;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::thread;
 
 pub const MIN_CAPACITY: usize = 1024;
 
 #[derive(Clone)]
-pub enum Entry<K, V>
-where
-    K: Integer + Signed + NumCast + Clone + Send + Sync,
-    V: PartialEq + Clone + Send + Sync,
-{
+pub enum Entry<K, V> {
     Vacant,
     Occupied { key: K, value: V },
     DeferredOccupied { key: K, value: V },
@@ -28,11 +24,7 @@ pub type Entries<K, V> = Vec<LockedEntry<K, V>>;
 pub type TableReader<'a, K, V> = RwLockReadGuard<'a, Entries<K, V>>;
 pub type TableWriter<'a, K, V> = RwLockWriteGuard<'a, Entries<K, V>>;
 
-pub struct HashTable<K, V>
-where
-    K: Integer + Signed + NumCast + Clone + Send + Sync,
-    V: PartialEq + Clone + Send + Sync,
-{
+pub struct HashTable<K, V> {
     entries: RwLock<Entries<K, V>>,
     size: AtomicUsize,
     is_resizing: AtomicBool,
@@ -40,7 +32,7 @@ where
 
 impl<K, V> HashTable<K, V>
 where
-    K: Integer + Signed + NumCast + Clone + Send + Sync,
+    K: Integer + Signed + NumCast + PartialEq + Clone + Send + Sync,
     V: PartialEq + Clone + Send + Sync,
 {
     const PRIME_NUMBERS: [u64; 5] = [53, 97, 193, 389, 9223372036854775807];
@@ -77,52 +69,26 @@ where
         let mut capacity = std::usize::MAX;
         let mut attempt = 0;
         while attempt < capacity {
-            let table_reader = self.lock_table_reader();
-            let new_capacity = table_reader.len();
-            if capacity == std::usize::MAX {
-                capacity = new_capacity;
-            }
-
-            let is_resized = capacity != new_capacity;
-            if is_resized {
-                attempt = 0;
-                capacity = new_capacity;
-                thread::yield_now();
-                continue;
-            }
-
-            let index = Self::hash(&key, attempt, capacity);
-            let entry = table_reader[index].lock().unwrap();
-            match entry.as_ref() {
-                Entry::Occupied {
-                    key: old_key,
-                    value: old_value,
-                } => {
-                    if *old_key == *key {
-                        return Some(old_value.clone());
-                    }
+            {
+                let table_reader = self.lock_table_reader();
+                if Self::is_resized(&mut capacity, &table_reader) {
+                    attempt = 0;
+                    continue;
                 }
-                Entry::Vacant => break,
-                Entry::Removed => (),
-                Entry::DeferredRemoved { key: old_key } => {
-                    if *old_key == *key {
-                        break;
+
+                let boxed_entry = Self::lock_entry(&key, attempt, capacity, &table_reader);
+                match boxed_entry.as_ref() {
+                    Entry::Occupied { key: k, value: v } if *k == *key => {
+                        return Some(v.clone());
                     }
-                }
-                Entry::DeferredOccupied {
-                    key: old_key,
-                    value: _,
-                } => {
-                    if *old_key == *key {
-                        break;
-                    }
+                    Entry::Vacant => break,
+                    Entry::DeferredRemoved { key: k } if *k == *key => break,
+                    Entry::DeferredOccupied { key: k, value: _ } if *k == *key => break,
+                    _ => (),
                 }
             }
 
-            if self.is_resizing.load(Ordering::SeqCst) {
-                thread::yield_now();
-            }
-
+            self.yield_if_resizing();
             attempt += 1;
         }
 
@@ -135,48 +101,30 @@ where
         loop {
             {
                 let table_reader = self.lock_table_reader();
-                let new_capacity = table_reader.len();
-                if capacity == std::usize::MAX {
-                    capacity = new_capacity;
-                }
-
-                let is_resized = capacity != new_capacity;
-                if is_resized || attempt >= capacity {
-                    capacity = new_capacity;
+                if Self::is_resized(&mut capacity, &table_reader) || attempt >= capacity {
                     attempt = 0;
-                    thread::yield_now();
                     continue;
                 }
 
-                let index = Self::hash(&key, attempt, capacity);
-                let mut entry = table_reader[index].lock().unwrap();
-                match entry.as_ref() {
+                let mut boxed_entry = Self::lock_entry(&key, attempt, capacity, &table_reader);
+                match boxed_entry.as_ref() {
                     Entry::Vacant => {
-                        *entry = self.new_occupied_entry(key, value);
+                        *boxed_entry = self.new_occupied_entry(key, value);
                         self.size.fetch_add(1, Ordering::SeqCst);
                         break;
                     }
-                    Entry::Occupied {
-                        key: old_key,
-                        value: _,
+                    Entry::Occupied { key: k, value: _ }
+                    | Entry::DeferredOccupied { key: k, value: _ }
+                        if *k == key =>
+                    {
+                        *boxed_entry = self.new_occupied_entry(key, value);
+                        break;
                     }
-                    | Entry::DeferredOccupied {
-                        key: old_key,
-                        value: _,
-                    } => {
-                        if *old_key == key {
-                            *entry = self.new_occupied_entry(key, value);
-                            break;
-                        }
-                    }
-                    Entry::Removed | Entry::DeferredRemoved { key: _ } => (),
+                    _ => (),
                 }
             }
 
-            if self.is_resizing.load(Ordering::SeqCst) {
-                thread::yield_now();
-            }
-
+            self.yield_if_resizing();
             attempt += 1;
         }
     }
@@ -187,51 +135,31 @@ where
         while attempt < capacity {
             {
                 let table_reader = self.lock_table_reader();
-                let new_capacity = table_reader.len();
-                if capacity == std::usize::MAX {
-                    capacity = new_capacity;
-                }
-
-                if capacity != new_capacity {
-                    capacity = new_capacity;
+                if Self::is_resized(&mut capacity, &table_reader) {
                     attempt = 0;
-                    thread::yield_now();
                     continue;
                 }
 
-                let index = Self::hash(&key, attempt, capacity);
-                let mut entry = table_reader[index].lock().unwrap();
-                match entry.as_ref() {
-                    Entry::Occupied {
-                        key: old_key,
-                        value: old_value,
-                    }
-                    | Entry::DeferredOccupied {
-                        key: old_key,
-                        value: old_value,
-                    } => {
-                        if *old_key == *key {
-                            let new_entry = self.new_removed_entry(key.clone());
-                            let old_value = old_value.clone();
-                            *entry = new_entry;
-                            self.size.fetch_sub(1, Ordering::SeqCst);
-                            return Some(old_value);
-                        }
+                let mut boxed_entry = Self::lock_entry(&key, attempt, capacity, &table_reader);
+                match boxed_entry.as_ref() {
+                    Entry::Occupied { key: k, value: v }
+                    | Entry::DeferredOccupied { key: k, value: v }
+                        if *k == *key =>
+                    {
+                        let new_entry = self.new_removed_entry(key.clone());
+                        let v = v.clone();
+                        *boxed_entry = new_entry;
+                        self.size.fetch_sub(1, Ordering::SeqCst);
+                        return Some(v);
                     }
                     Entry::Vacant => break,
                     Entry::Removed => (),
-                    Entry::DeferredRemoved { key: old_key } => {
-                        if *old_key == *key {
-                            break;
-                        }
-                    }
+                    Entry::DeferredRemoved { key: k } if *k == *key => break,
+                    _ => (),
                 }
             }
 
-            if self.is_resizing.load(Ordering::SeqCst) {
-                thread::yield_now();
-            }
-
+            self.yield_if_resizing();
             attempt += 1;
         }
 
@@ -261,6 +189,29 @@ where
         self.is_resizing.store(false, Ordering::SeqCst);
     }
 
+    fn is_resized<'a>(capacity: &mut usize, table_reader: &TableReader<'a, K, V>) -> bool {
+        let new_capacity = table_reader.len();
+        let is_capacity_uninitialized = *capacity == std::usize::MAX;
+        if is_capacity_uninitialized {
+            *capacity = new_capacity;
+        }
+
+        let mut capacity_changed = false;
+        if *capacity != new_capacity {
+            *capacity = new_capacity;
+            capacity_changed = true;
+            thread::yield_now();
+        }
+
+        capacity_changed
+    }
+
+    fn yield_if_resizing(&self) {
+        if self.is_resizing.load(Ordering::SeqCst) {
+            thread::yield_now();
+        }
+    }
+
     fn new_occupied_entry(&self, key: K, value: V) -> BoxedEntry<K, V> {
         let entry = if self.is_resizing.load(Ordering::SeqCst) {
             Entry::DeferredOccupied {
@@ -273,6 +224,7 @@ where
                 value: value,
             }
         };
+
         Box::new(entry)
     }
 
@@ -282,7 +234,18 @@ where
         } else {
             Entry::Removed
         };
+
         Box::new(entry)
+    }
+
+    fn lock_entry<'a>(
+        key: &K,
+        attempt: usize,
+        capacity: usize,
+        table_reader: &'a TableReader<'a, K, V>,
+    ) -> MutexGuard<'a, BoxedEntry<K, V>> {
+        let index = Self::hash(&key, attempt, capacity);
+        table_reader[index].lock().unwrap()
     }
 
     fn hash(key: &K, attempt: usize, capacity: usize) -> usize {
