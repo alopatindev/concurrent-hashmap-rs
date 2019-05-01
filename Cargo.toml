@@ -1,5 +1,5 @@
 [package]
-name = "rust-hashmap-test-task"
+name = "concurrent-hashmap-rs"
 version = "0.1.0"
 authors = ["Alexander Lopatin <alopatindev@gmail.com>"]
 edition = "2018"
