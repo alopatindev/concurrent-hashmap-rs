@@ -214,7 +214,7 @@ fn test_concurrent_remove(inputs: Vec<(i32, i64)>) -> bool {
                 .iter()
                 .skip(i * inputs_per_thread)
                 .take(inputs_per_thread)
-                .for_each(|(key, value)| m.insert(key.clone(), value.clone()))
+                .for_each(|(key, value)| m.insert(key.clone(), value.clone()));
         }))
     }
 
@@ -285,9 +285,7 @@ fn test_concurrent_resize_table() {
             (0..last_key)
                 .skip((i * inputs_per_thread) as usize)
                 .take(inputs_per_thread as usize)
-                .for_each(|j| {
-                    m.insert(j, j);
-                })
+                .for_each(|j| m.insert(j, j));
         }));
     }
 
@@ -308,8 +306,8 @@ fn test_concurrent_resize_table() {
                 .skip((i * inputs_per_thread) as usize)
                 .take(inputs_per_thread as usize)
                 .for_each(|j| {
-                    result.compare_and_swap(true, m.get(&j) == Some(j), Ordering::SeqCst);
-                })
+                    let _ = result.compare_and_swap(true, m.get(&j) == Some(j), Ordering::SeqCst);
+                });
         }));
     }
 
@@ -328,7 +326,7 @@ fn test_concurrent_resize_table() {
                 .take(inputs_per_thread as usize)
                 .for_each(|j| {
                     let _ = m.remove(&j);
-                })
+                });
         }));
     }
 
@@ -355,9 +353,7 @@ fn test_deferred_removes() {
             (0..last_key)
                 .skip((i * inputs_per_thread) as usize)
                 .take(inputs_per_thread as usize)
-                .for_each(|j| {
-                    m.insert(j, j);
-                })
+                .for_each(|j| m.insert(j, j));
         }));
     }
 
@@ -370,7 +366,7 @@ fn test_deferred_removes() {
                 .take(inputs_per_thread as usize)
                 .for_each(|j| {
                     let _ = m.remove(&j);
-                })
+                });
         }));
     }
 
