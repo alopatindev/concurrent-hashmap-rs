@@ -3,6 +3,7 @@ name = "concurrent-hashmap"
 version = "0.1.0"
 authors = ["Alexander Lopatin <alopatindev@gmail.com>"]
 edition = "2018"
+license = "MIT/Apache-2.0"
 
 [dependencies]
 num = "0.2.0"
