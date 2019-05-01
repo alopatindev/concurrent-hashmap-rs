@@ -1,5 +1,5 @@
 [package]
-name = "concurrent-hashmap-rs"
+name = "concurrent-hashmap"
 version = "0.1.0"
 authors = ["Alexander Lopatin <alopatindev@gmail.com>"]
 edition = "2018"

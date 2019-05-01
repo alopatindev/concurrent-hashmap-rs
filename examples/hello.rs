@@ -1,4 +1,4 @@
-use concurrent_hashmap_rs::hashmap::HashMap;
+use concurrent_hashmap::hashmap::HashMap;
 use std::sync::Arc;
 use std::thread;
 
