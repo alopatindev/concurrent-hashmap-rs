@@ -68,21 +68,15 @@ where
     }
 
     fn rebuild_hash_table(&self, capacity: usize) -> HashTable<K, V> {
-        let entries: Vec<_> = {
-            let table_reader = self.hash_table.lock_table_reader();
-            table_reader
-                .iter()
-                .filter_map(|item| match *item.lock().unwrap().clone() {
-                    Entry::Occupied { key, value } => Some((key, value)),
-                    _ => None,
-                })
-                .collect()
-        };
-
+        let table_reader = self.hash_table.lock_table_reader();
         let new_hash_table = HashTable::with_capacity(capacity);
 
-        entries
-            .into_iter()
+        table_reader
+            .iter()
+            .filter_map(|item| match *item.lock().unwrap().clone() {
+                Entry::Occupied { key, value } => Some((key, value)),
+                _ => None,
+            })
             .for_each(|(key, value)| new_hash_table.insert(key, value));
 
         new_hash_table
