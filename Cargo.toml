@@ -8,6 +8,7 @@ license = "MIT/Apache-2.0"
 [dependencies]
 num = "0.2.0"
 num-traits = "0.2.6"
+parking_lot = "0.7.1"
 
 [dev-dependencies]
 num_cpus = "1.10.0"

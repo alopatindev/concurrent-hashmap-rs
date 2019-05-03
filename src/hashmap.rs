@@ -73,11 +73,10 @@ where
 
         table_reader
             .iter()
-            .filter_map(|item| match *item.lock().unwrap().clone() {
-                Entry::Occupied { key, value } => Some((key, value)),
-                _ => None,
-            })
-            .for_each(|(key, value)| new_hash_table.insert(key, value));
+            .for_each(|item| match item.lock().as_ref() {
+                Entry::Occupied { key, value } => new_hash_table.insert(key.clone(), value.clone()),
+                _ => (),
+            });
 
         new_hash_table
     }
@@ -95,16 +94,18 @@ where
     ) -> TableWriter<'a, K, V> {
         table_writer
             .iter()
-            .for_each(|item| match *item.lock().unwrap().clone() {
-                Entry::DeferredOccupied { key, value } => new_hash_table.insert(key, value),
+            .for_each(|item| match item.lock().as_ref() {
+                Entry::DeferredOccupied { key, value } => {
+                    new_hash_table.insert(key.clone(), value.clone())
+                }
                 _ => (),
             });
 
         table_writer
             .iter()
-            .for_each(|item| match *item.lock().unwrap().clone() {
+            .for_each(|item| match item.lock().as_ref() {
                 Entry::DeferredRemoved { key } => {
-                    let _ = new_hash_table.remove(&key);
+                    let _ = new_hash_table.remove(key);
                 }
                 _ => (),
             });

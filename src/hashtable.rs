@@ -1,14 +1,14 @@
 use num::Integer;
 use num_traits::cast::NumCast;
 use num_traits::Signed;
+use parking_lot::{Mutex, MutexGuard};
 use std::cmp::max;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::thread;
 
 pub const MIN_CAPACITY: usize = 1024;
 
-#[derive(Clone)]
 pub enum Entry<K, V> {
     Vacant,
     Occupied { key: K, value: V },
@@ -248,7 +248,7 @@ where
         table_reader: &'a TableReader<'a, K, V>,
     ) -> MutexGuard<'a, BoxedEntry<K, V>> {
         let index = Self::hash(&key, attempt, capacity);
-        table_reader[index].lock().unwrap()
+        table_reader[index].lock()
     }
 
     fn hash(key: &K, attempt: usize, capacity: usize) -> usize {
