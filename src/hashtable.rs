@@ -45,10 +45,7 @@ where
         let capacity = max(capacity, MIN_CAPACITY);
 
         let mut entries = Vec::with_capacity(capacity);
-        for _ in 0..capacity {
-            let lock = Mutex::new(Box::new(Entry::Vacant));
-            entries.push(lock);
-        }
+        entries.resize_with(capacity, || Mutex::new(Box::new(Entry::Vacant)));
 
         HashTable {
             entries: RwLock::new(entries),
@@ -210,13 +207,17 @@ where
     }
 
     fn yield_if_resizing(&self) {
-        if self.is_resizing.load(Ordering::SeqCst) {
+        if self.is_resizing() {
             thread::yield_now();
         }
     }
 
+    pub fn is_resizing(&self) -> bool {
+        self.is_resizing.load(Ordering::SeqCst)
+    }
+
     fn new_occupied_entry(&self, key: K, value: V) -> BoxedEntry<K, V> {
-        let entry = if self.is_resizing.load(Ordering::SeqCst) {
+        let entry = if self.is_resizing() {
             Entry::DeferredOccupied {
                 key: key,
                 value: value,
@@ -232,7 +233,7 @@ where
     }
 
     fn new_removed_entry(&self, key: K) -> BoxedEntry<K, V> {
-        let entry = if self.is_resizing.load(Ordering::SeqCst) {
+        let entry = if self.is_resizing() {
             Entry::DeferredRemoved { key: key.clone() }
         } else {
             Entry::Removed

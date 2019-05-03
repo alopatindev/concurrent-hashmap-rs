@@ -96,7 +96,7 @@ where
             .iter()
             .for_each(|item| match item.lock().as_ref() {
                 Entry::DeferredOccupied { key, value } => {
-                    new_hash_table.insert(key.clone(), value.clone())
+                    new_hash_table.insert(key.clone(), value.clone());
                 }
                 _ => (),
             });
