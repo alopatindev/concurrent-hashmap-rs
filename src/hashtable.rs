@@ -55,7 +55,7 @@ where
     }
 
     pub fn len(&self) -> usize {
-        self.size.load(Ordering::SeqCst)
+        self.size.load(Ordering::Relaxed)
     }
 
     pub fn capacity(&self) -> usize {
@@ -109,7 +109,7 @@ where
                 match boxed_entry.as_ref() {
                     Entry::Vacant => {
                         *boxed_entry = self.new_occupied_entry(key, value);
-                        self.size.fetch_add(1, Ordering::SeqCst);
+                        self.size.fetch_add(1, Ordering::Relaxed);
                         break;
                     }
                     Entry::Occupied { key: k, value: _ }
@@ -148,7 +148,7 @@ where
                         let new_entry = self.new_removed_entry(key.clone());
                         let v = v.clone();
                         *boxed_entry = new_entry;
-                        self.size.fetch_sub(1, Ordering::SeqCst);
+                        self.size.fetch_sub(1, Ordering::Relaxed);
                         return Some(v);
                     }
                     Entry::Vacant => break,
@@ -180,12 +180,12 @@ where
     pub fn begin_resizing(&self) -> bool {
         let failed = self
             .is_resizing
-            .compare_and_swap(false, true, Ordering::SeqCst);
+            .compare_and_swap(false, true, Ordering::AcqRel);
         !failed
     }
 
     pub fn end_resizing(&self) {
-        self.is_resizing.store(false, Ordering::SeqCst);
+        self.is_resizing.store(false, Ordering::Release);
     }
 
     fn update_capacity_and_check_if_resized<'a>(
@@ -213,7 +213,7 @@ where
     }
 
     pub fn is_resizing(&self) -> bool {
-        self.is_resizing.load(Ordering::SeqCst)
+        self.is_resizing.load(Ordering::Relaxed)
     }
 
     fn new_occupied_entry(&self, key: K, value: V) -> BoxedEntry<K, V> {
