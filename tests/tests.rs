@@ -136,7 +136,7 @@ fn test_concurrent_insert(inputs: Vec<(i32, i64)>) -> bool {
     }
 
     let inputs = Arc::new(inputs);
-    let m: Arc<HashMap<i32, i64>> = Arc::new(HashMap::new());
+    let m = Arc::new(HashMap::new());
     let mut threads = Vec::new();
     for i in 0..threads_num {
         let m = m.clone();
@@ -203,7 +203,7 @@ fn test_concurrent_remove(inputs: Vec<(i32, i64)>) -> bool {
             });
     }
 
-    let m: Arc<HashMap<i32, i64>> = Arc::new(HashMap::new());
+    let m = Arc::new(HashMap::new());
     let inputs = Arc::new(inputs);
     let mut threads = Vec::new();
     for i in 0..threads_num {
@@ -273,7 +273,7 @@ fn test_concurrent_remove(inputs: Vec<(i32, i64)>) -> bool {
 
 #[test]
 fn test_concurrent_resize_table() {
-    let m: Arc<HashMap<i32, i32>> = Arc::new(HashMap::new());
+    let m = Arc::new(HashMap::new());
     let last_key = (MIN_CAPACITY * 100) as i32;
     let threads_num = num_cpus::get() as i32;
     let inputs_per_thread = last_key / threads_num;
@@ -341,7 +341,7 @@ fn test_concurrent_resize_table() {
 
 #[test]
 fn test_deferred_removes() {
-    let m: Arc<HashMap<i32, i32>> = Arc::new(HashMap::new());
+    let m = Arc::new(HashMap::new());
     let last_key = (MIN_CAPACITY * 100) as i32;
     let threads_num = num_cpus::get() as i32;
     let inputs_per_thread = last_key / threads_num;
@@ -378,10 +378,10 @@ fn test_deferred_removes() {
 #[test]
 fn test_large_input() {
     let input_size: i32 = 500_000;
-    let mut inputs: Vec<(i32, i32)> = (0..input_size).zip(0..input_size).collect();
+    let mut inputs: Vec<_> = (0..input_size).zip(0..input_size).collect();
     inputs.shuffle(&mut thread_rng());
 
-    let m: Arc<HashMap<i32, i32>> = Arc::new(HashMap::new());
+    let m = Arc::new(HashMap::new());
     let inputs = Arc::new(inputs);
 
     let threads_num = num_cpus::get();

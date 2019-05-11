@@ -11,7 +11,12 @@ num-traits = "0.2.6"
 parking_lot = "0.7.1"
 
 [dev-dependencies]
+criterion = "0.2.11"
 num_cpus = "1.10.0"
 quickcheck = "0.8.2"
 quickcheck_macros = "0.8.0"
 rand = "0.6.5"
+
+[[bench]]
+name = "benchmark"
+harness = false
