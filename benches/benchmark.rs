@@ -1,47 +1,51 @@
 #[macro_use]
 extern crate criterion;
+#[macro_use]
+extern crate lazy_static;
 
 use concurrent_hashmap::hashmap::HashMap;
-use core::time::Duration;
-use criterion::Criterion;
+use criterion::{black_box, Criterion};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::sync::Arc;
 use std::thread;
 
 type Key = i32;
-type Value = Key;
-type Inputs = Vec<(Key, Value)>;
+type Inputs = Vec<Key>;
+
+const OPERATIONS_NUM: usize = 10_000;
+
+lazy_static! {
+    static ref INPUTS: Inputs = new_random_vec(OPERATIONS_NUM);
+}
 
 fn random_operations_benchmark(c: &mut Criterion) {
-    let mut n = 100;
-    while n <= 1_000_000 {
-        let title = format!("{} random operations", n);
-        let inputs = new_random_array(n);
+    for threads_num in 1..=num_cpus::get() {
+        let title = format!("{} thread(s)", threads_num);
         c.bench_function(&title, move |b| {
-            b.iter_with_setup(|| inputs.to_vec(), |inputs| random_operations(inputs));
+            b.iter(|| random_operations(black_box(threads_num)))
         });
-        n *= 10;
     }
 }
 
-fn random_operations(inputs: Inputs) {
+fn random_operations(threads_num: usize) {
     let m = Arc::new(HashMap::new());
-    let inputs = Arc::new(inputs);
-
-    let threads_num = num_cpus::get();
     let mut threads = Vec::new();
-    for _ in 0..threads_num {
+    let inputs_per_thread = INPUTS.len() / threads_num;
+    for i in 0..threads_num {
         let m = m.clone();
-        let inputs = inputs.clone();
         threads.push(thread::spawn(move || {
-            inputs.iter().for_each(|(key, value)| {
-                if key % 2 == 0 {
-                    m.insert(key.clone(), value.clone());
-                } else {
-                    let _ = m.remove(&key);
-                }
-            });
+            (0..INPUTS.len())
+                .skip(i * inputs_per_thread)
+                .take(inputs_per_thread)
+                .map(|i| (INPUTS[i], INPUTS[i]))
+                .for_each(|(key, value)| {
+                    if key % 2 == 0 {
+                        m.insert(key.clone(), value.clone());
+                    } else {
+                        let _ = m.remove(&key);
+                    }
+                });
         }));
     }
 
@@ -50,24 +54,12 @@ fn random_operations(inputs: Inputs) {
     }
 }
 
-fn new_random_array(n: usize) -> Inputs {
+fn new_random_vec(n: usize) -> Inputs {
     let n = n as Key;
-    let mut inputs: Vec<_> = (0..n).zip(0..n).collect();
+    let mut inputs: Inputs = (0..n).collect();
     inputs.shuffle(&mut thread_rng());
     inputs
 }
 
-fn new_short_benchmark() -> Criterion {
-    Criterion::default()
-        .measurement_time(Duration::from_secs(10))
-        .nresamples(1000)
-        .sample_size(10)
-}
-
-criterion_group!(
-    name = benches;
-    config = new_short_benchmark();
-    targets = random_operations_benchmark,
-);
-
+criterion_group!(benches, random_operations_benchmark);
 criterion_main!(benches);
