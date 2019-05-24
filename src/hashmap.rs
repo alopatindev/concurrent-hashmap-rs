@@ -98,12 +98,6 @@ where
                 Entry::DeferredOccupied { key, value } => {
                     new_hash_table.insert(key.clone(), value.clone());
                 }
-                _ => (),
-            });
-
-        table_writer
-            .iter()
-            .for_each(|item| match item.lock().as_ref() {
                 Entry::DeferredRemoved { key } => {
                     let _ = new_hash_table.remove(key);
                 }

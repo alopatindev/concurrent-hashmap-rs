@@ -234,7 +234,7 @@ where
 
     fn new_removed_entry(&self, key: K) -> BoxedEntry<K, V> {
         let entry = if self.is_resizing() {
-            Entry::DeferredRemoved { key: key.clone() }
+            Entry::DeferredRemoved { key }
         } else {
             Entry::Removed
         };
