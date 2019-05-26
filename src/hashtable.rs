@@ -3,6 +3,7 @@ use num_traits::cast::NumCast;
 use num_traits::Signed;
 use parking_lot::{Mutex, MutexGuard};
 use std::cmp::max;
+use std::mem;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::thread;
@@ -253,14 +254,20 @@ where
     }
 
     fn hash(key: &K, attempt: usize, capacity: usize) -> usize {
-        let attempt = attempt as u64;
-        let key: u64 = key.abs().to_u64().unwrap();
-        let universal_hash = |a: &[u64]| (a[0] * key + a[1]) % Self::PRIME_NUMBERS[4];
+        type U = u64;
+
+        let bits_in_u64 = mem::size_of::<U>() * 8;
+        let sign_mask = (key.is_negative() as U) << (bits_in_u64 - 1);
+        let key: U = key.abs().to_u64().map(|k| k | sign_mask).unwrap();
+
+        let universal_hash =
+            |a: &[U]| (a[0].wrapping_mul(key).wrapping_add(a[1])) % Self::PRIME_NUMBERS[4];
 
         let h1 = universal_hash(&Self::PRIME_NUMBERS[0..2]);
         let h2 = universal_hash(&Self::PRIME_NUMBERS[2..4]);
 
-        let value = h1 + attempt * h2;
+        let attempt = attempt as U;
+        let value = h1.wrapping_add(attempt.wrapping_mul(h2));
         (value as usize) % capacity
     }
 }

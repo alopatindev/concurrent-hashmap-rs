@@ -53,6 +53,21 @@ fn test_insert() {
 }
 
 #[test]
+fn test_insert_bounds() {
+    let m = HashMap::new();
+
+    let key = std::i64::MAX;
+    m.insert(key, 0);
+    assert!(m.contains_key(&key));
+    assert_eq!(m.get(&key), Some(0));
+
+    let key = std::i64::MIN + 1;
+    m.insert(key, 1);
+    assert!(m.contains_key(&key));
+    assert_eq!(m.get(&key), Some(1));
+}
+
+#[test]
 fn test_remove() {
     let m = HashMap::new();
     m.insert(1, 2);
