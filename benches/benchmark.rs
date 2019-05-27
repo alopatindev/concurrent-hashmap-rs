@@ -5,8 +5,9 @@ extern crate lazy_static;
 
 use concurrent_hashmap::hashmap::HashMap;
 use criterion::{black_box, Criterion};
+use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::SeedableRng;
 use std::sync::Arc;
 use std::thread;
 
@@ -57,7 +58,7 @@ fn random_operations(threads_num: usize) {
 fn new_random_vec(n: usize) -> Inputs {
     let n = n as Key;
     let mut inputs: Inputs = (0..n).collect();
-    inputs.shuffle(&mut thread_rng());
+    inputs.shuffle(&mut StdRng::from_seed([0u8; 32]));
     inputs
 }
 
