@@ -36,6 +36,7 @@ where
     K: Integer + Signed + NumCast + PartialEq + Clone + Send + Sync,
     V: PartialEq + Clone + Send + Sync,
 {
+    const ATTEMPTS_BEFORE_YIELD: usize = 3;
     const PRIME_NUMBERS: [u64; 5] = [53, 97, 193, 389, 9223372036854775807];
 
     pub fn new() -> Self {
@@ -86,8 +87,8 @@ where
                 }
             }
 
-            self.yield_if_resizing();
             attempt += 1;
+            self.backoff(attempt);
         }
 
         None
@@ -124,8 +125,8 @@ where
                 }
             }
 
-            self.yield_if_resizing();
             attempt += 1;
+            self.backoff(attempt);
         }
     }
 
@@ -159,8 +160,8 @@ where
                 }
             }
 
-            self.yield_if_resizing();
             attempt += 1;
+            self.backoff(attempt);
         }
 
         None
@@ -207,8 +208,8 @@ where
         return false;
     }
 
-    fn yield_if_resizing(&self) {
-        if self.is_resizing() {
+    fn backoff(&self, attempt: usize) {
+        if attempt % Self::ATTEMPTS_BEFORE_YIELD == 0 && self.is_resizing() {
             thread::yield_now();
         }
     }
