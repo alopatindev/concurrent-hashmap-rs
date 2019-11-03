@@ -1,3 +1,4 @@
+use crossbeam::utils::Backoff;
 use num::Integer;
 use num_traits::cast::NumCast;
 use num_traits::Signed;
@@ -6,7 +7,6 @@ use std::cmp::max;
 use std::mem;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use std::thread;
 
 pub const MIN_CAPACITY: usize = 1024;
 
@@ -36,7 +36,6 @@ where
     K: Integer + Signed + NumCast + PartialEq + Clone + Send + Sync,
     V: PartialEq + Clone + Send + Sync,
 {
-    const ATTEMPTS_BEFORE_YIELD: usize = 3;
     const PRIME_NUMBERS: [u64; 5] = [53, 97, 193, 389, 9223372036854775807];
 
     pub fn new() -> Self {
@@ -67,6 +66,7 @@ where
     pub fn get(&self, key: &K) -> Option<V> {
         let mut capacity = std::usize::MAX;
         let mut attempt = 0;
+        let backoff = Backoff::new();
         while attempt < capacity {
             {
                 let table_reader = self.lock_table_reader();
@@ -87,8 +87,8 @@ where
                 }
             }
 
+            self.spin_if_resizing(&backoff);
             attempt += 1;
-            self.backoff(attempt);
         }
 
         None
@@ -97,6 +97,7 @@ where
     pub fn insert(&self, key: K, value: V) {
         let mut attempt = 0;
         let mut capacity = std::usize::MAX;
+        let backoff = Backoff::new();
         loop {
             {
                 let table_reader = self.lock_table_reader();
@@ -125,14 +126,15 @@ where
                 }
             }
 
+            self.spin_if_resizing(&backoff);
             attempt += 1;
-            self.backoff(attempt);
         }
     }
 
     pub fn remove(&self, key: &K) -> Option<V> {
         let mut attempt = 0;
         let mut capacity = std::usize::MAX;
+        let backoff = Backoff::new();
         while attempt < capacity {
             {
                 let table_reader = self.lock_table_reader();
@@ -160,8 +162,8 @@ where
                 }
             }
 
+            self.spin_if_resizing(&backoff);
             attempt += 1;
-            self.backoff(attempt);
         }
 
         None
@@ -208,9 +210,9 @@ where
         return false;
     }
 
-    fn backoff(&self, attempt: usize) {
-        if attempt % Self::ATTEMPTS_BEFORE_YIELD == 0 && self.is_resizing() {
-            thread::yield_now();
+    fn spin_if_resizing(&self, backoff: &Backoff) {
+        if self.is_resizing() {
+            backoff.spin();
         }
     }
 
